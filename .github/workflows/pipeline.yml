@@ -196,22 +196,26 @@ ANSIBLE_HOST_KEY_CHECKING: "False"
 # 3. DESTROY (manual trigger only)
 # ================================
 destroy:
-name: Destroy Infrastructure
-if: github.event_name == 'workflow_dispatch'
-runs-on: ubuntu-latest
-defaults:
-run:
-working-directory: terraform
-steps:
-- uses: actions/checkout@v3
-- name: Configure AWS Credentials
-uses: aws-actions/configure-aws-credentials@v2
-with:
-aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-aws-region: ${{ secrets.AWS_REGION }}
-- uses: hashicorp/setup-terraform@v3
-- name: Terraform Destroy
-run: terraform destroy -auto-approve
->>>>>>> 72d46fa (Initial full pipeline)
+  name: 🗑️ Destroy Infrastructure
+  if: github.event_name == 'workflow_dispatch'
+  runs-on: ubuntu-latest
+
+  defaults:
+    run:
+      working-directory: terraform
+
+  steps:
+    - uses: actions/checkout@v3
+
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+        aws-region: ${{ secrets.AWS_REGION }}
+
+    - uses: hashicorp/setup-terraform@v3
+
+    - name: Terraform Destroy
+      run: terraform destroy -auto-approve
