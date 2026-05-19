@@ -3,19 +3,17 @@ name: Full DevOps Pipeline
 on:
   push:
     branches: [ "main" ]
-  workflow_dispatch:  # Permet le déclenchement manuel
+  workflow_dispatch:
 
 jobs:
 
-  # ══════════════════════════════════════════
-  # 1. TERRAFORM — Créer l'infrastructure AWS
-  # ══════════════════════════════════════════
   terraform:
     name: 🏗️ Provision Infrastructure
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: terraform
+
     outputs:
       instance_ips: ${{ steps.export.outputs.instance_ips }}
       alb_dns: ${{ steps.export.outputs.alb_dns }}
@@ -54,12 +52,7 @@ jobs:
           ALB=$(terraform output -raw alb_dns_name)
           echo "instance_ips=$IPS" >> $GITHUB_OUTPUT
           echo "alb_dns=$ALB" >> $GITHUB_OUTPUT
-          echo "✅ IPs: $IPS"
-          echo "✅ ALB: $ALB"
 
-  # ══════════════════════════════════════════
-  # 2. ANSIBLE — Configurer les serveurs
-  # ══════════════════════════════════════════
   ansible:
     name: ⚙️ Configure Servers
     runs-on: ubuntu-latest
@@ -89,31 +82,23 @@ jobs:
               echo "$ip ansible_user=ec2-user ansible_ssh_private_key_file=~/.ssh/id_rsa" >> inventory.ini
             fi
           done
-          echo "📋 Inventory généré:"
-          cat inventory.ini
 
-      - name: ⏳ Wait for EC2 to be ready (60s)
+      - name: ⏳ Wait for EC2
         run: sleep 60
 
       - name: 🎭 Run Ansible Playbook
-        run: |
-          ansible-playbook -i inventory.ini ansible/deploy.yml -v
+        run: ansible-playbook -i inventory.ini ansible/deploy.yml -v
         env:
           ANSIBLE_HOST_KEY_CHECKING: "False"
 
       - name: 🌐 Show App URL
         run: |
-          echo "════════════════════════════════════"
-          echo "🎉 DÉPLOIEMENT TERMINÉ !"
+          echo "🎉 DÉPLOIEMENT TERMINÉ"
           echo "🌐 App URL: http://${{ needs.terraform.outputs.alb_dns }}"
-          echo "════════════════════════════════════"
 
-  # ══════════════════════════════════════════
-  # 3. DESTROY — Optionnel (manuel seulement)
-  # ══════════════════════════════════════════
   destroy:
     name: 🗑️ Destroy Infrastructure
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy'
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -121,6 +106,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+
       - name: 🔑 Configure AWS
         uses: aws-actions/configure-aws-credentials@v2
         with:
@@ -128,10 +114,10 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ secrets.AWS_REGION }}
+
       - uses: hashicorp/setup-terraform@v3
+
       - run: terraform init
+
       - name: 💥 Terraform Destroy
         run: terraform destroy -auto-approve
-
-      - name: Test AWS
-        run: aws sts get-caller-identity
