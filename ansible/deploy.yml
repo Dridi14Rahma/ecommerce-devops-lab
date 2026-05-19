@@ -1,85 +1,44 @@
 ---
-- name: Deploy E-Commerce Application
-  hosts: web
-  become: yes
-  gather_facts: yes
-
-  tasks:
-
-    # ── Installation Docker ────────────────────
-    - name: Update packages
-      yum:
-        name: "*"
-        state: latest
-
-    - name: Install Docker
-      yum:
-        name: docker
-        state: present
-
-    - name: Start and enable Docker
-      service:
-        name: docker
-        state: started
-        enabled: yes
-
-    - name: Install Docker Compose
-      get_url:
-        url: "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64"
-        dest: /usr/local/bin/docker-compose
-        mode: '0755'
-
-    # ── Déploiement Nginx ──────────────────────
-    - name: Run Nginx container
-      shell: |
-        docker stop nginx 2>/dev/null || true
-        docker rm nginx 2>/dev/null || true
-        docker run -d \
-          --name nginx \
-          --restart always \
-          -p 80:80 \
-          -e BACKEND_URL=http://localhost:3000 \
-          nginx:alpine
-
-    # ── Déploiement Node.js App ────────────────
-    - name: Run Node.js e-commerce app
-      shell: |
-        docker stop nodeapp 2>/dev/null || true
-        docker rm nodeapp 2>/dev/null || true
-        docker run -d \
-          --name nodeapp \
-          --restart always \
-          -p 3000:3000 \
-          -e MONGO_URL=mongodb://mongodb:27017/ecommerce \
-          node:18-alpine \
-          sh -c "npm install express mongoose && node -e \"
-            const express = require('express');
-            const app = express();
-            app.get('/', (req, res) => {
-              res.send('
-E-Commerce Store
-Laptop \$1200
-Phone \$800
-');
-            });
-            app.listen(3000, () => console.log('Running on 3000'));
-          \""
-
-    # ── Déploiement MongoDB ────────────────────
-    - name: Run MongoDB container
-      shell: |
-        docker stop mongodb 2>/dev/null || true
-        docker rm mongodb 2>/dev/null || true
-        docker run -d \
-          --name mongodb \
-          --restart always \
-          -p 27017:27017 \
-          mongo:6
-
-    - name: Verify containers are running
-      shell: docker ps
-      register: containers
-    
-    - name: Show running containers
-      debug:
-        msg: "{{ containers.stdout }}"
+- name: Deploy E-Commerce App
+hosts: web
+become: yes
+tasks:
+- name: Update system packages
+yum:
+name: "*"
+state: latest
+- name: Install Docker
+yum:
+name: docker
+state: present
+- name: Start and enable Docker
+service:
+name: docker
+state: started
+enabled: yes
+- name: Add ec2-user to docker group
+user:
+name: ec2-user
+groups: docker
+append: yes
+- name: Install Docker Compose
+get_url:
+url: https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64
+dest: /usr/local/bin/docker-compose
+mode: "0755"
+- name: Create app directory
+file:
+path: /app
+state: directory
+owner: ec2-user
+- name: Copy docker-compose file
+copy:
+src: docker-compose.yml
+dest: /app/docker-compose.yml
+- name: Copy nginx config
+copy:
+src: nginx.conf
+dest: /app/nginx.conf
+- name: Run containers
+shell: docker-compose -f /app/docker-compose.yml up -d
+become_user: ec2-user
