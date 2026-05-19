@@ -107,9 +107,12 @@ resource "aws_security_group" "ec2_sg" {
 }
 
 # ─── Key Pair SSH ─────────────────────────────────────────
+variable "public_key" {
+  type = string
+}
 resource "aws_key_pair" "deployer" {
   key_name   = "ecommerce-key"
-  public_key = file("~/.ssh/id_rsa.pub")
+  public_key = var.public_key
 }
 
 # ─── EC2 Instances ────────────────────────────────────────
