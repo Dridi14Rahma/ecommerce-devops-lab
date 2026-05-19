@@ -49,7 +49,7 @@ to_port = 80
 protocol = "tcp"
 cidr_blocks = ["0.0.0.0/0"]
 }
-<<<<<<< HEAD
+
 
 # ─── Key Pair SSH ─────────────────────────────────────────
 variable "public_key" {
@@ -58,7 +58,7 @@ variable "public_key" {
 resource "aws_key_pair" "deployer" {
   key_name   = "ecommerce-key"
   public_key = var.public_key
-=======
+
 egress {
 from_port = 0
 to_port = 0
