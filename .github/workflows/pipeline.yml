@@ -132,3 +132,6 @@ jobs:
       - run: terraform init
       - name: 💥 Terraform Destroy
         run: terraform destroy -auto-approve
+
+      - name: Test AWS
+        run: aws sts get-caller-identity
