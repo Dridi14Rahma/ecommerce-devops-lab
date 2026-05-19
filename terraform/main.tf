@@ -2,7 +2,7 @@ provider "aws" {
   region = var.aws_region
 }
 
-# ---------------- VPC ----------------
+# --- VPC ---
 resource "aws_vpc" "main" {
   cidr_block           = "10.0.0.0/16"
   enable_dns_hostnames = true
@@ -12,7 +12,7 @@ resource "aws_vpc" "main" {
   }
 }
 
-# ---------------- Internet Gateway ----------------
+# --- Internet Gateway ---
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.main.id
 
@@ -21,7 +21,7 @@ resource "aws_internet_gateway" "igw" {
   }
 }
 
-# ---------------- Subnet ----------------
+# --- Public Subnet ---
 resource "aws_subnet" "public" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = "10.0.1.0/24"
@@ -33,7 +33,7 @@ resource "aws_subnet" "public" {
   }
 }
 
-# ---------------- Route Table ----------------
+# --- Route Table ---
 resource "aws_route_table" "public_rt" {
   vpc_id = aws_vpc.main.id
 
@@ -52,7 +52,7 @@ resource "aws_route_table_association" "rta" {
   route_table_id = aws_route_table.public_rt.id
 }
 
-# ---------------- Security Group ----------------
+# --- Security Group ---
 resource "aws_security_group" "web_sg" {
   name   = "web-sg"
   vpc_id = aws_vpc.main.id
@@ -83,17 +83,7 @@ resource "aws_security_group" "web_sg" {
   }
 }
 
-# ---------------- SSH Key Pair ----------------
-variable "public_key" {
-  type = string
-}
-
-resource "aws_key_pair" "deployer" {
-  key_name   = "ecommerce-key"
-  public_key = var.public_key
-}
-
-# ---------------- IAM Role ----------------
+# --- IAM Role ---
 data "aws_iam_role" "lab_role" {
   name = "LabRole"
 }
@@ -103,7 +93,7 @@ resource "aws_iam_instance_profile" "lab_profile" {
   role = data.aws_iam_role.lab_role.name
 }
 
-# ---------------- EC2 ----------------
+# --- EC2 Instances ---
 resource "aws_instance" "web" {
   count         = 2
   ami           = "ami-0c02fb55956c7d316"
@@ -112,7 +102,6 @@ resource "aws_instance" "web" {
   subnet_id              = aws_subnet.public.id
   vpc_security_group_ids = [aws_security_group.web_sg.id]
 
-  key_name               = aws_key_pair.deployer.key_name
   iam_instance_profile   = aws_iam_instance_profile.lab_profile.name
 
   tags = {
@@ -120,7 +109,7 @@ resource "aws_instance" "web" {
   }
 }
 
-# ---------------- Output ----------------
+# --- Output IPs ---
 output "instance_public_ips" {
   value = aws_instance.web[*].public_ip
 }
