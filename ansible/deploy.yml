@@ -1,9 +1,14 @@
 ---
-- name: Deploy E-Commerce App
+- name: Deploy App
   hosts: web
-  become: true
+  become: yes
 
   tasks:
+
+    - name: Update system
+      yum:
+        name: "*"
+        state: latest
 
     - name: Install Docker
       yum:
@@ -14,13 +19,27 @@
       service:
         name: docker
         state: started
-        enabled: true
+        enabled: yes
 
-    - name: Run Nginx Container
-      docker_container:
-        name: nginx
-        image: nginx
-        state: started
-        restart_policy: always
-        ports:
-          - "80:80"
+    - name: Install Docker Compose
+      get_url:
+        url: https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64
+        dest: /usr/local/bin/docker-compose
+        mode: "0755"
+
+    - name: Create app folder
+      file:
+        path: /app
+        state: directory
+
+    - name: Copy files
+      copy:
+        src: "{{ item }}"
+        dest: /app/
+      loop:
+        - docker-compose.yml
+        - nginx.conf
+
+    - name: Run containers
+      shell: docker-compose -f /app/docker-compose.yml up -d
+      become_user: ec2-user
