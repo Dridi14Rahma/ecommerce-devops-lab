@@ -1,9 +1,7 @@
 variable "aws_region" {
-  default = "us-east-1"
+default = "us-east-1"
 }
-
 variable "key_name" {
-  default = "devops-key"
+description = "Name of your AWS Key Pair"
+default = "devops-key"
 }
-
-variable "public_key" {}
