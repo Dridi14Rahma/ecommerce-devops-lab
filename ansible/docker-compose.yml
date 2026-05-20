@@ -6,9 +6,8 @@ services:
     ports:
       - "80:80"
 
-  nodeapp:
+  node:
     image: node:18
-    working_dir: /app
     command: node server.js
 
   mongo:

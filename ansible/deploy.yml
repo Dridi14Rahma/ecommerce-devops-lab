@@ -27,7 +27,7 @@
         dest: /usr/local/bin/docker-compose
         mode: "0755"
 
-    - name: Create app folder
+    - name: Create app directory
       file:
         path: /app
         state: directory

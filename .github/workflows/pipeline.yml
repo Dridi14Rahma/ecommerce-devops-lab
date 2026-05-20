@@ -9,6 +9,7 @@ jobs:
   terraform:
     name: Terraform Infra
     runs-on: ubuntu-latest
+
     defaults:
       run:
         working-directory: terraform

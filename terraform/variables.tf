@@ -5,3 +5,5 @@ variable "aws_region" {
 variable "key_name" {
   default = "devops-key"
 }
+
+variable "public_key" {}

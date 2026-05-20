@@ -72,14 +72,12 @@ resource "aws_security_group" "web_sg" {
 }
 
 # ---------------- Key Pair ----------------
-variable "public_key" {}
-
 resource "aws_key_pair" "deployer" {
   key_name   = var.key_name
   public_key = var.public_key
 }
 
-# ---------------- EC2 Instances ----------------
+# ---------------- EC2 ----------------
 resource "aws_instance" "web" {
   count         = 2
   ami           = "ami-0c02fb55956c7d316"
@@ -90,6 +88,6 @@ resource "aws_instance" "web" {
   key_name               = aws_key_pair.deployer.key_name
 
   tags = {
-    Name = "web-${count.index}"
+    Name = "web-${count.index + 1}"
   }
 }
