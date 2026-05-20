@@ -76,7 +76,4 @@ key_name = var.key_name
 iam_instance_profile = aws_iam_instance_profile.lab_profile.name
 tags = { Name = "web-${count.index + 1}" }
 }
-# --- Output IPs (used by Ansible) ---
-output "instance_public_ips" {
-value = aws_instance.web[*].public_ip
-}
+
