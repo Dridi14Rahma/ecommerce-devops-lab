@@ -67,7 +67,7 @@ jobs:
 
       - name: Setup SSH Key
         run: |
-          echo "${{ secrets.EC2_KEY }}" > key.pem
+          printf "%s" "${{ secrets.EC2_KEY }}" | tr -d '\r' > key.pem
           chmod 600 key.pem
 
       - name: Generate Inventory
@@ -75,6 +75,7 @@ jobs:
           echo "[web]" > inventory.ini
           for ip in $(echo "${{ needs.terraform.outputs.instance_ips }}" | tr ',' ' '); do
             echo "$ip ansible_user=ec2-user ansible_ssh_private_key_file=key.pem" >> inventory.ini
+
           done
 
       - name: Run Ansible Playbook
