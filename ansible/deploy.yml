@@ -1,44 +1,54 @@
 ---
 - name: Deploy E-Commerce App
-hosts: web
-become: yes
-tasks:
-- name: Update system packages
-yum:
-name: "*"
-state: latest
-- name: Install Docker
-yum:
-name: docker
-state: present
-- name: Start and enable Docker
-service:
-name: docker
-state: started
-enabled: yes
-- name: Add ec2-user to docker group
-user:
-name: ec2-user
-groups: docker
-append: yes
-- name: Install Docker Compose
-get_url:
-url: https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64
-dest: /usr/local/bin/docker-compose
-mode: "0755"
-- name: Create app directory
-file:
-path: /app
-state: directory
-owner: ec2-user
-- name: Copy docker-compose file
-copy:
-src: docker-compose.yml
-dest: /app/docker-compose.yml
-- name: Copy nginx config
-copy:
-src: nginx.conf
-dest: /app/nginx.conf
-- name: Run containers
-shell: docker-compose -f /app/docker-compose.yml up -d
-become_user: ec2-user
+  hosts: web
+  become: yes
+
+  tasks:
+
+    - name: Update system packages
+      yum:
+        name: "*"
+        state: latest
+
+    - name: Install Docker
+      yum:
+        name: docker
+        state: present
+
+    - name: Start Docker
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Add ec2-user to docker group
+      user:
+        name: ec2-user
+        groups: docker
+        append: yes
+
+    - name: Install Docker Compose
+      get_url:
+        url: https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64
+        dest: /usr/local/bin/docker-compose
+        mode: "0755"
+
+    - name: Create app directory
+      file:
+        path: /app
+        state: directory
+        owner: ec2-user
+
+    - name: Copy docker-compose file
+      copy:
+        src: docker-compose.yml
+        dest: /app/docker-compose.yml
+
+    - name: Copy nginx config
+      copy:
+        src: nginx.conf
+        dest: /app/nginx.conf
+
+    - name: Run containers
+      shell: docker-compose -f /app/docker-compose.yml up -d
+      become_user: ec2-user
