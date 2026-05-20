@@ -62,7 +62,7 @@ data "aws_iam_role" "lab_role" {
 name = "LabRole"
 }
 resource "aws_iam_instance_profile" "lab_profile" {
-name = "lab-instance-profile-v7"
+name = "lab-instance-profile-v8"
 role = data.aws_iam_role.lab_role.name
 }
 # --- EC2 Instances ---
