@@ -10,12 +10,8 @@ resource "aws_instance" "web" {
   instance_type = "t3.micro"
   key_name      = "lab-key"
   
-  # Minimal user_data - just ensure basic tools are available
-  # Ansible will handle all heavy lifting (Python, Docker, etc)
-  user_data = <<-EOF
-    #!/bin/bash
-    yum install -y curl git wget
-  EOF
+  # NO user_data - let instances boot cleanly without any script execution
+  # Amazon Linux 2 has Python 3.7 by default - Ansible will use it
   
   tags = { 
     Name = "web-${count.index + 1}" 

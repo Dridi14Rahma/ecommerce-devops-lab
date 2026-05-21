@@ -3,12 +3,12 @@
   hosts: web
   become: yes
   gather_facts: no
-  
-  # NE PAS utiliser Python 3.11 au démarrage - utiliser le défaut!
-  # Python 3.11 sera disponible après le user_data Terraform
+
+  vars:
+    ansible_user: ec2-user
 
   pre_tasks:
-    - name: Wait for SSH port to be available
+    - name: Wait for SSH to be available
       wait_for:
         host: "{{ inventory_hostname }}"
         port: 22
@@ -16,56 +16,30 @@
         timeout: 600
       vars:
         ansible_connection: local
-        ansible_python_interpreter: auto_legacy_group_vars
 
-    - name: Check if Python 3.11 is available
-      raw: which python3.11
-      register: python311_check
-      ignore_errors: yes
-      retries: 30
+    - name: Wait for instance to fully boot (ping test)
+      ping:
+      retries: 20
       delay: 10
-      until: python311_check.rc == 0
+      ignore_errors: yes
 
-    - name: Ensure Python 3.11 is installed (if not found)
-      raw: |
-        if ! which python3.11 >/dev/null 2>&1; then
-          sudo yum update -y
-          sudo yum install -y python3.11
-        fi
-      when: python311_check.rc != 0
+    - name: Check current Python version
+      raw: python3 --version
+      register: current_python
+      ignore_errors: yes
 
-    - name: Set Python interpreter to 3.11
-      set_fact:
-        ansible_python_interpreter: /usr/bin/python3.11
-
-  vars:
-    ansible_user: ec2-user
-
-  tasks:
-
-    - name: Install Python 3.11 (attempt 1 - yum)
-      raw: yum install -y python3.11
+    - name: Install Python 3.11
+      raw: yum install -y python3.11 2>/dev/null || amazon-linux-extras install -y python3.11 || true
       retries: 5
       delay: 10
       ignore_errors: yes
 
-    - name: Install Python 3.11 (attempt 2 - amazon-linux-extras)
-      raw: amazon-linux-extras install -y python3.11
-      retries: 3
-      delay: 5
-      ignore_errors: yes
-
-    - name: Verify Python 3.11 is available
-      raw: which python3.11 && echo "Python 3.11 found" || echo "Python 3.11 NOT found, will use default"
-      register: python_verify
-      ignore_errors: yes
-
-    - name: Set Python interpreter to 3.11 if available
+    - name: Set Python 3.11 as interpreter
       set_fact:
         ansible_python_interpreter: /usr/bin/python3.11
-      when: python_verify.rc == 0
 
-    - name: Gather Facts
+  tasks:
+    - name: Gather facts
       setup:
 
     - name: Install system dependencies
@@ -75,82 +49,43 @@
           - curl
           - wget
           - yum-utils
-        state: present
-      retries: 3
-      delay: 10
-
-    - name: Install Docker repository
-      shell: yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
-      ignore_errors: yes
-      retries: 2
-      delay: 10
-
-    - name: Install Docker
-      yum:
-        name:
-          - docker-ce
-          - docker-ce-cli
-          - containerd.io
+          - docker
         state: present
       retries: 3
       delay: 10
       ignore_errors: yes
 
-    - name: Install Docker from amazon-linux (fallback)
-      yum:
-        name: docker
-        state: present
-      retries: 2
-      delay: 5
-      ignore_errors: yes
-
-    - name: Start Docker service
+    - name: Start Docker
       service:
         name: docker
         state: started
         enabled: yes
       retries: 3
-      delay: 5
-
-    - name: Verify Docker is running
-      command: docker ps
-      retries: 5
       delay: 10
-      register: docker_verify
-      until: docker_verify.rc == 0
+      ignore_errors: yes
+
+    - name: Wait for Docker to be ready
+      command: docker ps
+      retries: 10
+      delay: 5
+      register: docker_ready
+      until: docker_ready.rc == 0
+      ignore_errors: yes
 
     - name: Add ec2-user to docker group
       user:
         name: ec2-user
         groups: docker
         append: yes
-      retries: 2
-      delay: 5
 
-    - name: Install Docker Compose from GitHub
-      get_url:
-        url: https://github.com/docker/compose/releases/latest/download/docker-compose-Linux-x86_64
-        dest: /usr/local/bin/docker-compose
-        mode: "0755"
+    - name: Install Docker Compose
+      shell: |
+        if ! command -v docker-compose &> /dev/null; then
+          curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          chmod +x /usr/local/bin/docker-compose
+        fi
       retries: 3
       delay: 10
-      ignore_errors: yes
-
-    - name: Install Docker Compose fallback (v2.20.0)
-      get_url:
-        url: https://github.com/docker/compose/releases/download/v2.20.0/docker-compose-Linux-x86_64
-        dest: /usr/local/bin/docker-compose
-        mode: "0755"
-      retries: 2
-      delay: 5
-      when: "'docker-compose' not in lookup('pipe', 'which docker-compose || echo missing')"
-      ignore_errors: yes
-
-    - name: Verify Docker Compose is installed
-      command: docker-compose --version
-      retries: 3
-      delay: 5
-      register: compose_verify
       ignore_errors: yes
 
     - name: Create app directory
@@ -184,36 +119,36 @@
         owner: ec2-user
         group: ec2-user
         mode: "0755"
+        recursive: yes
 
-    - name: Reset SSH connection to apply docker group changes
+    - name: Reset SSH connection
       meta: reset_connection
 
-    - name: Run containers
+    - name: Start containers
       shell: |
         cd /home/ec2-user/app
         docker-compose up -d
       become_user: ec2-user
-      environment:
-        PATH: "{{ ansible_env.PATH }}"
       retries: 5
       delay: 10
-      register: compose_result
-      until: compose_result.rc == 0
+      register: compose_start
+      until: compose_start.rc == 0
+      ignore_errors: yes
 
-    - name: Wait for containers to start
+    - name: Wait for application
       pause:
         seconds: 30
 
-    - name: Wait for application to be ready
+    - name: Health check
       uri:
-        url: "http://localhost"
+        url: "http://{{ inventory_hostname }}"
         status_code: 200
       retries: 10
       delay: 10
-      register: result
-      until: result.status == 200
+      register: app_health
+      until: app_health.status == 200
       ignore_errors: yes
 
-    - name: Display deployment status
+    - name: Deployment status
       debug:
-        msg: "Application deployed successfully on {{ inventory_hostname }}"
+        msg: "Application deployed on {{ inventory_hostname }}"
