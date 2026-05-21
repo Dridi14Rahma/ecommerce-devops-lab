@@ -3,56 +3,11 @@ provider "aws" {
   region = var.aws_region
 }
 
-# --- Security Group ---
-resource "aws_security_group" "web_sg" {
-  name   = "web-sg-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
-  
-  # SSH
-  ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  
-  # HTTP
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  
-  # HTTPS
-  ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  
-  tags = { 
-    Name = "web-sg" 
-  }
-
-  lifecycle {
-    create_before_destroy = true
-  }
-}
-
 # --- EC2 Instances ---
 resource "aws_instance" "web" {
   count           = 2
   ami             = "ami-0c02fb55956c7d316"
   instance_type   = "t3.micro"
-  security_groups = [aws_security_group.web_sg.name]
   key_name        = "lab-key"
   
   user_data = <<-EOF
