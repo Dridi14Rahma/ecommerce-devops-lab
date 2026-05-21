@@ -113,7 +113,8 @@ resource "aws_instance" "web" {
   user_data = <<-EOF
     #!/bin/bash
     sudo yum update -y
-    sudo yum install -y docker
+    sudo yum install -y python3.11 docker git
+    sudo ln -sf /usr/bin/python3.11 /usr/bin/python3
     sudo systemctl start docker
     sudo systemctl enable docker
     sudo usermod -a -G docker ec2-user
@@ -123,6 +124,102 @@ resource "aws_instance" "web" {
   
   tags = { 
     Name = "web-${count.index + 1}" 
+  }
+}
+
+# --- Application Load Balancer ---
+resource "aws_lb" "app" {
+  name               = "app-load-balancer"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb_sg.id]
+  subnets            = [aws_subnet.public.id, aws_subnet.private.id]
+  
+  enable_deletion_protection = false
+  tags = {
+    Name = "app-alb"
+  }
+}
+
+# --- Security Group for ALB ---
+resource "aws_security_group" "alb_sg" {
+  name   = "alb-sg"
+  vpc_id = aws_vpc.main.id
+  
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  
+  tags = {
+    Name = "alb-sg"
+  }
+}
+
+# --- Target Group ---
+resource "aws_lb_target_group" "app" {
+  name        = "app-target-group"
+  port        = 80
+  protocol    = "HTTP"
+  vpc_id      = aws_vpc.main.id
+  
+  health_check {
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+    timeout             = 3
+    interval            = 30
+    path                = "/"
+    matcher             = "200"
+  }
+  
+  tags = {
+    Name = "app-tg"
+  }
+}
+
+# --- Target Group Attachment ---
+resource "aws_lb_target_group_attachment" "app" {
+  count            = 2
+  target_group_arn = aws_lb_target_group.app.arn
+  target_id        = aws_instance.web[count.index].id
+  port             = 80
+}
+
+# --- ALB Listener ---
+resource "aws_lb_listener" "app" {
+  load_balancer_arn = aws_lb.app.arn
+  port              = 80
+  protocol          = "HTTP"
+  
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.app.arn
+  }
+}
+
+# --- Private Subnet for ALB ---
+resource "aws_subnet" "private" {
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = "10.0.2.0/24"
+  availability_zone = "us-east-1b"
+  tags = {
+    Name = "devops-private-subnet"
   }
 }
 
@@ -137,7 +234,12 @@ output "instance_private_ips" {
   value       = aws_instance.web[*].private_ip
 }
 
+output "alb_dns" {
+  description = "DNS name of the Application Load Balancer"
+  value       = aws_lb.app.dns_name
+}
+
 output "app_url" {
-  description = "URL to access the application"
-  value       = "http://${aws_instance.web[0].public_ip}"
+  description = "URL to access the application through load balancer"
+  value       = "http://${aws_lb.app.dns_name}"
 }

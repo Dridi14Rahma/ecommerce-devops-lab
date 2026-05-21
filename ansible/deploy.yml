@@ -2,22 +2,45 @@
 - name: Deploy E-Commerce App
   hosts: web
   become: yes
+  gather_facts: no
+
+  pre_tasks:
+    - name: Wait for system to be ready
+      wait_for_connection:
+        delay: 10
+        timeout: 300
+
+    - name: Ensure Python 3.11 is installed
+      raw: |
+        which python3.11 || (
+          sudo yum update -y &&
+          sudo yum install -y python3.11
+        )
+
+    - name: Set Python interpreter
+      set_fact:
+        ansible_python_interpreter: /usr/bin/python3.11
 
   vars:
-    ansible_python_interpreter: /usr/bin/python3
-
+    ansible_python_interpreter: /usr/bin/python3.11
+    ansible_user: ec2-user
 
   tasks:
 
+    - name: Gather Facts
+      setup:
+
     - name: Update system packages
-      apt:
+      yum:
         name: "*"
         state: latest
-        update_cache: yes
 
-    - name: Install Docker
-      apt:
-        name: docker.io
+    - name: Install required packages
+      yum:
+        name:
+          - docker
+          - git
+          - curl
         state: present
 
     - name: Start Docker
@@ -26,34 +49,77 @@
         state: started
         enabled: yes
 
-    - name: Add riri to docker group
+    - name: Add ec2-user to docker group
       user:
-        name: riri
+        name: ec2-user
         groups: docker
         append: yes
 
-    - name: Install Docker Compose
+    - name: Verify Docker Compose is installed
+      command: which docker-compose
+      register: docker_compose_check
+      ignore_errors: yes
+
+    - name: Install Docker Compose if not present
       get_url:
         url: https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64
         dest: /usr/local/bin/docker-compose
         mode: "0755"
+      when: docker_compose_check.rc != 0
 
     - name: Create app directory
       file:
-        path: /app
+        path: /home/ec2-user/app
         state: directory
-        owner: riri
+        owner: ec2-user
+        group: ec2-user
+        mode: "0755"
 
     - name: Copy docker-compose file
       copy:
         src: docker-compose.yml
-        dest: /app/docker-compose.yml
+        dest: /home/ec2-user/app/docker-compose.yml
+        owner: ec2-user
+        group: ec2-user
+        mode: "0644"
 
     - name: Copy nginx config
       copy:
         src: nginx.conf
-        dest: /app/nginx.conf
+        dest: /home/ec2-user/app/nginx.conf
+        owner: ec2-user
+        group: ec2-user
+        mode: "0644"
+
+    - name: Copy server files
+      copy:
+        src: server/
+        dest: /home/ec2-user/app/server/
+        owner: ec2-user
+        group: ec2-user
+        mode: "0755"
+
+    - name: Reset SSH connection to apply docker group changes
+      meta: reset_connection
 
     - name: Run containers
-      shell: docker-compose -f /app/docker-compose.yml up -d
-      become_user: riri
+      shell: |
+        cd /home/ec2-user/app
+        docker-compose up -d
+      become_user: ec2-user
+      environment:
+        PATH: "{{ ansible_env.PATH }}"
+
+    - name: Wait for application to be ready
+      uri:
+        url: "http://localhost"
+        status_code: 200
+      retries: 5
+      delay: 10
+      register: result
+      until: result.status == 200
+      ignore_errors: yes
+
+    - name: Display deployment status
+      debug:
+        msg: "Application deployed successfully on {{ inventory_hostname }}"
