@@ -3,11 +3,11 @@ provider "aws" {
   region = var.aws_region
 }
 
-# --- Security Group (uses default VPC automatically) ---
+# --- Security Group ---
 resource "aws_security_group" "web_sg" {
   name   = "web-sg-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
   
-  # SSH (port 22)
+  # SSH
   ingress {
     from_port   = 22
     to_port     = 22
@@ -15,7 +15,7 @@ resource "aws_security_group" "web_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
   
-  # HTTP (port 80)
+  # HTTP
   ingress {
     from_port   = 80
     to_port     = 80
@@ -23,7 +23,7 @@ resource "aws_security_group" "web_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
   
-  # HTTPS (port 443)
+  # HTTPS
   ingress {
     from_port   = 443
     to_port     = 443
@@ -47,10 +47,10 @@ resource "aws_security_group" "web_sg" {
   }
 }
 
-# --- EC2 Instances (on default VPC) ---
+# --- EC2 Instances ---
 resource "aws_instance" "web" {
   count           = 2
-  ami             = "ami-0c02fb55956c7d316"  # Amazon Linux 2
+  ami             = "ami-0c02fb55956c7d316"
   instance_type   = "t3.micro"
   security_groups = [aws_security_group.web_sg.name]
   key_name        = "lab-key"
@@ -83,7 +83,12 @@ output "instance_private_ips" {
   value       = aws_instance.web[*].private_ip
 }
 
-output "access_url" {
-  description = "URL to access the application (use instance IP directly)"
-  value       = "http://${aws_instance.web[0].public_ip}:80"
+output "app_url_instance1" {
+  description = "URL to access application on instance 1"
+  value       = "http://${aws_instance.web[0].public_ip}"
+}
+
+output "app_url_instance2" {
+  description = "URL to access application on instance 2"
+  value       = "http://${aws_instance.web[1].public_ip}"
 }
