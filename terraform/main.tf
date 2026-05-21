@@ -72,93 +72,6 @@ resource "aws_instance" "web" {
   }
 }
 
-# --- Security Group for ALB ---
-resource "aws_security_group" "alb_sg" {
-  name   = "alb-sg-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
-  
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  
-  ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  
-  tags = {
-    Name = "alb-sg"
-  }
-
-  lifecycle {
-    create_before_destroy = true
-  }
-}
-
-# --- Application Load Balancer (on default VPC) ---
-resource "aws_lb" "app" {
-  name               = "app-lb-${formatdate("hhmm", timestamp())}"
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb_sg.id]
-  
-  enable_deletion_protection = false
-  tags = {
-    Name = "app-alb"
-  }
-}
-
-# --- Target Group ---
-resource "aws_lb_target_group" "app" {
-  name        = "app-tg-${formatdate("hhmm", timestamp())}"
-  port        = 80
-  protocol    = "HTTP"
-  
-  health_check {
-    healthy_threshold   = 2
-    unhealthy_threshold = 2
-    timeout             = 3
-    interval            = 30
-    path                = "/"
-    matcher             = "200"
-  }
-  
-  tags = {
-    Name = "app-tg"
-  }
-}
-
-# --- Target Group Attachment ---
-resource "aws_lb_target_group_attachment" "app" {
-  count            = 2
-  target_group_arn = aws_lb_target_group.app.arn
-  target_id        = aws_instance.web[count.index].id
-  port             = 80
-}
-
-# --- ALB Listener ---
-resource "aws_lb_listener" "app" {
-  load_balancer_arn = aws_lb.app.arn
-  port              = 80
-  protocol          = "HTTP"
-  
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.app.arn
-  }
-}
-
 # --- Outputs ---
 output "instance_public_ips" {
   description = "Public IP addresses of EC2 instances"
@@ -170,12 +83,7 @@ output "instance_private_ips" {
   value       = aws_instance.web[*].private_ip
 }
 
-output "alb_dns" {
-  description = "DNS name of the Application Load Balancer"
-  value       = aws_lb.app.dns_name
-}
-
-output "app_url" {
-  description = "URL to access the application through load balancer"
-  value       = "http://${aws_lb.app.dns_name}"
+output "access_url" {
+  description = "URL to access the application (use instance IP directly)"
+  value       = "http://${aws_instance.web[0].public_ip}:80"
 }
