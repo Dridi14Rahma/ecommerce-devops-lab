@@ -17,12 +17,6 @@
       vars:
         ansible_connection: local
 
-    - name: Wait for instance to fully boot
-      wait_for_connection:
-        timeout: 600
-        sleep: 10
-        delay: 10
-
     - name: Install Python 3.11
       raw: yum install -y python3.11 2>/dev/null || amazon-linux-extras install -y python3.11 || true
       retries: 5

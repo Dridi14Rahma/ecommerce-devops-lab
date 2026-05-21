@@ -71,7 +71,7 @@ resource "aws_lb" "app" {
 }
 
 resource "aws_lb_target_group" "app" {
-  name        = "ecommerce-prod-tg"
+  name_prefix = "eprod"
   port        = 80
   protocol    = "HTTP"
   target_type = "instance"
