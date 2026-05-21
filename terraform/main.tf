@@ -90,16 +90,6 @@ resource "aws_security_group" "web_sg" {
   }
 }
 
-# --- LabRole for Student Account ---
-data "aws_iam_role" "lab_role" {
-  name = "LabRole"
-}
-
-resource "aws_iam_instance_profile" "lab_profile" {
-  name = "lab-instance-profile-v28"
-  role = data.aws_iam_role.lab_role.name
-}
-
 # --- EC2 Instances ---
 resource "aws_instance" "web" {
   count         = 2
@@ -108,7 +98,6 @@ resource "aws_instance" "web" {
   subnet_id     = aws_subnet.public.id
   vpc_security_group_ids = [aws_security_group.web_sg.id]
   key_name      = "lab-key"  # Utilisation directe du nom de la clé existante
-  iam_instance_profile = aws_iam_instance_profile.lab_profile.name
   
   user_data = <<-EOF
     #!/bin/bash
