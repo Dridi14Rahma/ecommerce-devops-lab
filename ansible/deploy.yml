@@ -58,7 +58,11 @@
     - name: Start containers
       raw: |
         cd /home/ec2-user/app/ansible
-        docker-compose up -d
+        if [ -x /usr/local/bin/docker-compose ]; then
+          /usr/local/bin/docker-compose up -d
+        else
+          docker compose up -d
+        fi
       changed_when: false
 
     - name: Wait for application
