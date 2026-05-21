@@ -96,7 +96,7 @@ data "aws_iam_role" "lab_role" {
 }
 
 resource "aws_iam_instance_profile" "lab_profile" {
-  name = "lab-instance-profile-v21"
+  name = "lab-instance-profile-v22"
   role = data.aws_iam_role.lab_role.name
 }
 
