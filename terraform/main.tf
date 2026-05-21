@@ -61,7 +61,7 @@ resource "aws_instance" "web" {
 
 # --- Load balancer ---
 resource "aws_lb" "app" {
-  name               = "ecommerce-prod-alb"
+  name_prefix        = "eprod-"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_default_security_group.default.id]
