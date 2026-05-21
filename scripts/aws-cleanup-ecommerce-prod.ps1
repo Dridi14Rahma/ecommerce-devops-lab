@@ -116,4 +116,10 @@ if ($roleCheck -and $roleCheck -ne 'None') {
     Run-Action "6️⃣ Deleting role: $roleName" { aws iam delete-role --role-name $roleName }
 } else { Write-Host "6️⃣ IAM role not found (OK)" -ForegroundColor Green }
 
-Write-Host "`n✅ Cleanup script completed (dry-run mode unless -Execute was specified)." -ForegroundColor Green
+if ($Execute) {
+    Write-Host "`n✅ Cleanup script completed (execute mode)." -ForegroundColor Green
+} else {
+    Write-Host "`n✅ Cleanup script completed (dry-run mode)." -ForegroundColor Green
+}
+
+exit 0

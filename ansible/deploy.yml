@@ -17,16 +17,11 @@
       vars:
         ansible_connection: local
 
-    - name: Wait for instance to fully boot (ping test)
-      ping:
-      retries: 20
-      delay: 10
-      ignore_errors: yes
-
-    - name: Check current Python version
-      raw: python3 --version
-      register: current_python
-      ignore_errors: yes
+    - name: Wait for instance to fully boot
+      wait_for_connection:
+        timeout: 600
+        sleep: 10
+        delay: 10
 
     - name: Install Python 3.11
       raw: yum install -y python3.11 2>/dev/null || amazon-linux-extras install -y python3.11 || true
@@ -34,9 +29,23 @@
       delay: 10
       ignore_errors: yes
 
-    - name: Set Python 3.11 as interpreter
+    - name: Detect installed Python interpreter
+      raw: |
+        if command -v python3.11 >/dev/null 2>&1; then
+          command -v python3.11
+        elif command -v python3 >/dev/null 2>&1; then
+          command -v python3
+        elif command -v python >/dev/null 2>&1; then
+          command -v python
+        else
+          echo /usr/bin/python3
+        fi
+      register: python_interpreter_path
+      changed_when: false
+
+    - name: Set Python interpreter
       set_fact:
-        ansible_python_interpreter: /usr/bin/python3.11
+        ansible_python_interpreter: "{{ python_interpreter_path.stdout | trim }}"
 
   tasks:
     - name: Gather facts
