@@ -42,9 +42,6 @@
         ansible_python_interpreter: "{{ python_interpreter_path.stdout | trim }}"
 
   tasks:
-    - name: Gather facts
-      setup:
-
     - name: Install system dependencies
       yum:
         name:
