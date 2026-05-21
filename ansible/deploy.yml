@@ -6,13 +6,14 @@
   tasks:
 
     - name: Update system packages
-      yum:
+      apt:
         name: "*"
         state: latest
+        update_cache: yes
 
     - name: Install Docker
-      yum:
-        name: docker
+      apt:
+        name: docker.io
         state: present
 
     - name: Start Docker
@@ -21,9 +22,9 @@
         state: started
         enabled: yes
 
-    - name: Add ec2-user to docker group
+    - name: Add riri to docker group
       user:
-        name: ec2-user
+        name: riri
         groups: docker
         append: yes
 
@@ -37,7 +38,7 @@
       file:
         path: /app
         state: directory
-        owner: ec2-user
+        owner: riri
 
     - name: Copy docker-compose file
       copy:
@@ -51,4 +52,4 @@
 
     - name: Run containers
       shell: docker-compose -f /app/docker-compose.yml up -d
-      become_user: ec2-user
+      become_user: riri
