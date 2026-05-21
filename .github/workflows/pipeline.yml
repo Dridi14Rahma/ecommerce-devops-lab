@@ -51,8 +51,21 @@ jobs:
         id: export
         run: |
           IPS=$(terraform output -json instance_public_ips | jq -r '.[]' | tr '\n' ',')
+          LB_DNS=$(terraform output -raw load_balancer_dns_name | tr -d '\r')
+          if [ -z "$LB_DNS" ]; then
+            echo "Load balancer DNS output is empty" >&2
+            exit 1
+          fi
           echo "instance_ips=$IPS" >> $GITHUB_OUTPUT
-          echo "load_balancer_dns=$(terraform output -raw load_balancer_dns_name)" >> $GITHUB_OUTPUT
+          echo "load_balancer_dns=$LB_DNS" >> $GITHUB_OUTPUT
+          printf '%s' "$LB_DNS" > load_balancer_dns.txt
+
+      - name: Upload Load Balancer DNS
+        uses: actions/upload-artifact@v4
+        with:
+          name: infra-details
+          path: terraform/load_balancer_dns.txt
+          if-no-files-found: error
 
 
 # ================================
@@ -65,6 +78,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Download Infra Details
+        uses: actions/download-artifact@v4
+        with:
+          name: infra-details
+          path: .
 
       - name: Install Ansible
         run: |
@@ -93,8 +112,13 @@ jobs:
 
       - name: Verify Application Through Load Balancer
         run: |
+          LB_DNS=$(tr -d '\r\n' < load_balancer_dns.txt)
+          if [ -z "$LB_DNS" ]; then
+            echo "Load balancer DNS file is empty" >&2
+            exit 1
+          fi
           for i in $(seq 1 20); do
-            if curl -fsS "http://${{ needs.terraform.outputs.load_balancer_dns }}"; then
+            if curl -fsS "http://$LB_DNS"; then
               exit 0
             fi
             sleep 15
