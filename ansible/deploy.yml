@@ -3,6 +3,9 @@
   hosts: web
   become: yes
   gather_facts: no
+  
+  # NE PAS utiliser Python 3.11 au démarrage - utiliser le défaut!
+  # Python 3.11 sera disponible après le user_data Terraform
 
   pre_tasks:
     - name: Wait for SSH port to be available
@@ -13,29 +16,29 @@
         timeout: 600
       vars:
         ansible_connection: local
+        ansible_python_interpreter: auto_legacy_group_vars
 
-    - name: Wait for system to be ready (ping test)
-      ping:
-      register: ping_result
+    - name: Check if Python 3.11 is available
+      raw: which python3.11
+      register: python311_check
+      ignore_errors: yes
       retries: 30
       delay: 10
-      until: ping_result is succeeded
+      until: python311_check.rc == 0
 
-    - name: Ensure Python 3.11 is installed
+    - name: Ensure Python 3.11 is installed (if not found)
       raw: |
-        which python3.11 || (
-          sudo yum update -y &&
+        if ! which python3.11 >/dev/null 2>&1; then
+          sudo yum update -y
           sudo yum install -y python3.11
-        )
-      retries: 3
-      delay: 10
+        fi
+      when: python311_check.rc != 0
 
-    - name: Set Python interpreter
+    - name: Set Python interpreter to 3.11
       set_fact:
         ansible_python_interpreter: /usr/bin/python3.11
 
   vars:
-    ansible_python_interpreter: /usr/bin/python3.11
     ansible_user: ec2-user
 
   tasks:
