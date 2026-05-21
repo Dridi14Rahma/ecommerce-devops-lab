@@ -5,10 +5,21 @@
   gather_facts: no
 
   pre_tasks:
-    - name: Wait for system to be ready
-      wait_for_connection:
-        delay: 10
-        timeout: 300
+    - name: Wait for SSH port to be available
+      wait_for:
+        host: "{{ inventory_hostname }}"
+        port: 22
+        delay: 30
+        timeout: 600
+      vars:
+        ansible_connection: local
+
+    - name: Wait for system to be ready (ping test)
+      ping:
+      register: ping_result
+      retries: 30
+      delay: 10
+      until: ping_result is succeeded
 
     - name: Ensure Python 3.11 is installed
       raw: |
@@ -16,6 +27,8 @@
           sudo yum update -y &&
           sudo yum install -y python3.11
         )
+      retries: 3
+      delay: 10
 
     - name: Set Python interpreter
       set_fact:
@@ -48,6 +61,13 @@
         name: docker
         state: started
         enabled: yes
+
+    - name: Wait for Docker daemon to be ready
+      command: docker ps
+      register: docker_ready
+      retries: 5
+      delay: 10
+      until: docker_ready.rc == 0
 
     - name: Add ec2-user to docker group
       user:
@@ -109,12 +129,20 @@
       become_user: ec2-user
       environment:
         PATH: "{{ ansible_env.PATH }}"
+      retries: 5
+      delay: 10
+      register: compose_result
+      until: compose_result.rc == 0
+
+    - name: Wait for containers to start
+      pause:
+        seconds: 30
 
     - name: Wait for application to be ready
       uri:
         url: "http://localhost"
         status_code: 200
-      retries: 5
+      retries: 10
       delay: 10
       register: result
       until: result.status == 200
