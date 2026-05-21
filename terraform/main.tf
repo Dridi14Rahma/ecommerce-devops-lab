@@ -3,23 +3,9 @@ provider "aws" {
   region = var.aws_region
 }
 
-# --- Use Default VPC (available in voclabs) ---
-data "aws_vpc" "default" {
-  default = true
-}
-
-# --- Get Default Subnets ---
-data "aws_subnets" "default" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.default.id]
-  }
-}
-
-# --- Security Group ---
+# --- Security Group (uses default VPC automatically) ---
 resource "aws_security_group" "web_sg" {
   name   = "web-sg-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
-  vpc_id = data.aws_vpc.default.id
   
   # SSH (port 22)
   ingress {
@@ -61,13 +47,12 @@ resource "aws_security_group" "web_sg" {
   }
 }
 
-# --- EC2 Instances ---
+# --- EC2 Instances (on default VPC) ---
 resource "aws_instance" "web" {
   count           = 2
   ami             = "ami-0c02fb55956c7d316"  # Amazon Linux 2
   instance_type   = "t3.micro"
-  subnet_id       = data.aws_subnets.default.ids[count.index]
-  security_groups = [aws_security_group.web_sg.id]
+  security_groups = [aws_security_group.web_sg.name]
   key_name        = "lab-key"
   
   user_data = <<-EOF
@@ -90,7 +75,6 @@ resource "aws_instance" "web" {
 # --- Security Group for ALB ---
 resource "aws_security_group" "alb_sg" {
   name   = "alb-sg-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
-  vpc_id = data.aws_vpc.default.id
   
   ingress {
     from_port   = 80
@@ -122,13 +106,12 @@ resource "aws_security_group" "alb_sg" {
   }
 }
 
-# --- Application Load Balancer ---
+# --- Application Load Balancer (on default VPC) ---
 resource "aws_lb" "app" {
-  name               = "app-load-balancer"
+  name               = "app-lb-${formatdate("hhmm", timestamp())}"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb_sg.id]
-  subnets            = data.aws_subnets.default.ids
   
   enable_deletion_protection = false
   tags = {
@@ -138,10 +121,9 @@ resource "aws_lb" "app" {
 
 # --- Target Group ---
 resource "aws_lb_target_group" "app" {
-  name        = "app-target-group"
+  name        = "app-tg-${formatdate("hhmm", timestamp())}"
   port        = 80
   protocol    = "HTTP"
-  vpc_id      = data.aws_vpc.default.id
   
   health_check {
     healthy_threshold   = 2
@@ -196,4 +178,5 @@ output "alb_dns" {
 output "app_url" {
   description = "URL to access the application through load balancer"
   value       = "http://${aws_lb.app.dns_name}"
+}
 }
