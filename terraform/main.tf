@@ -3,12 +3,6 @@ provider "aws" {
   region = var.aws_region
 }
 
-# --- Key Pair ---
-resource "aws_key_pair" "lab" {
-  key_name   = "lab-key"
-  public_key = file("lab-key.pub")
-}
-
 # --- VPC ---
 resource "aws_vpc" "main" {
   cidr_block           = "10.0.0.0/16"
@@ -60,7 +54,7 @@ resource "aws_security_group" "web_sg" {
   name   = "web-sg"
   vpc_id = aws_vpc.main.id
   
-  # SSH (port 22) pour debug
+  # SSH (port 22)
   ingress {
     from_port   = 22
     to_port     = 22
@@ -68,7 +62,7 @@ resource "aws_security_group" "web_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
   
-  # HTTP (port 80) pour l'application
+  # HTTP (port 80)
   ingress {
     from_port   = 80
     to_port     = 80
@@ -76,7 +70,7 @@ resource "aws_security_group" "web_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
   
-  # HTTPS (port 443) optionnel
+  # HTTPS (port 443)
   ingress {
     from_port   = 443
     to_port     = 443
@@ -113,7 +107,7 @@ resource "aws_instance" "web" {
   instance_type = "t3.micro"
   subnet_id     = aws_subnet.public.id
   vpc_security_group_ids = [aws_security_group.web_sg.id]
-  key_name      = aws_key_pair.lab.key_name
+  key_name      = "lab-key"  # Utilisation directe du nom de la clé existante
   iam_instance_profile = aws_iam_instance_profile.lab_profile.name
   
   user_data = <<-EOF
@@ -143,7 +137,7 @@ output "instance_private_ips" {
   value       = aws_instance.web[*].private_ip
 }
 
-output "alb_dns_name" {
-  description = "ALB DNS name (if using ALB)"
+output "app_url" {
+  description = "URL to access the application"
   value       = "http://${aws_instance.web[0].public_ip}"
 }
