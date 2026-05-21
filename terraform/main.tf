@@ -3,56 +3,23 @@ provider "aws" {
   region = var.aws_region
 }
 
-# --- VPC ---
-resource "aws_vpc" "main" {
-  cidr_block           = "10.0.0.0/16"
-  enable_dns_hostnames = true
-  tags = { 
-    Name = "devops-vpc" 
-  }
+# --- Use Default VPC (available in voclabs) ---
+data "aws_vpc" "default" {
+  default = true
 }
 
-# --- Internet Gateway ---
-resource "aws_internet_gateway" "igw" {
-  vpc_id = aws_vpc.main.id
-  tags = { 
-    Name = "devops-igw" 
+# --- Get Default Subnets ---
+data "aws_subnets" "default" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
   }
-}
-
-# --- Public Subnet ---
-resource "aws_subnet" "public" {
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = "10.0.1.0/24"
-  map_public_ip_on_launch = true
-  availability_zone       = "us-east-1a"
-  tags = { 
-    Name = "devops-public-subnet" 
-  }
-}
-
-# --- Route Table ---
-resource "aws_route_table" "public_rt" {
-  vpc_id = aws_vpc.main.id
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.igw.id
-  }
-  tags = { 
-    Name = "devops-rt" 
-  }
-}
-
-# --- Route Table Association ---
-resource "aws_route_table_association" "rta" {
-  subnet_id      = aws_subnet.public.id
-  route_table_id = aws_route_table.public_rt.id
 }
 
 # --- Security Group ---
 resource "aws_security_group" "web_sg" {
-  name   = "web-sg"
-  vpc_id = aws_vpc.main.id
+  name   = "web-sg-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
+  vpc_id = data.aws_vpc.default.id
   
   # SSH (port 22)
   ingress {
@@ -88,16 +55,20 @@ resource "aws_security_group" "web_sg" {
   tags = { 
     Name = "web-sg" 
   }
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # --- EC2 Instances ---
 resource "aws_instance" "web" {
-  count         = 2
-  ami           = "ami-0c02fb55956c7d316"  # Amazon Linux 2
-  instance_type = "t3.micro"
-  subnet_id     = aws_subnet.public.id
-  vpc_security_group_ids = [aws_security_group.web_sg.id]
-  key_name      = "lab-key"  # Utilisation directe du nom de la clé existante
+  count           = 2
+  ami             = "ami-0c02fb55956c7d316"  # Amazon Linux 2
+  instance_type   = "t3.micro"
+  subnet_id       = data.aws_subnets.default.ids[count.index]
+  security_groups = [aws_security_group.web_sg.id]
+  key_name        = "lab-key"
   
   user_data = <<-EOF
     #!/bin/bash
@@ -116,24 +87,10 @@ resource "aws_instance" "web" {
   }
 }
 
-# --- Application Load Balancer ---
-resource "aws_lb" "app" {
-  name               = "app-load-balancer"
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb_sg.id]
-  subnets            = [aws_subnet.public.id, aws_subnet.private.id]
-  
-  enable_deletion_protection = false
-  tags = {
-    Name = "app-alb"
-  }
-}
-
 # --- Security Group for ALB ---
 resource "aws_security_group" "alb_sg" {
-  name   = "alb-sg"
-  vpc_id = aws_vpc.main.id
+  name   = "alb-sg-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
+  vpc_id = data.aws_vpc.default.id
   
   ingress {
     from_port   = 80
@@ -159,6 +116,24 @@ resource "aws_security_group" "alb_sg" {
   tags = {
     Name = "alb-sg"
   }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# --- Application Load Balancer ---
+resource "aws_lb" "app" {
+  name               = "app-load-balancer"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb_sg.id]
+  subnets            = data.aws_subnets.default.ids
+  
+  enable_deletion_protection = false
+  tags = {
+    Name = "app-alb"
+  }
 }
 
 # --- Target Group ---
@@ -166,7 +141,7 @@ resource "aws_lb_target_group" "app" {
   name        = "app-target-group"
   port        = 80
   protocol    = "HTTP"
-  vpc_id      = aws_vpc.main.id
+  vpc_id      = data.aws_vpc.default.id
   
   health_check {
     healthy_threshold   = 2
@@ -199,16 +174,6 @@ resource "aws_lb_listener" "app" {
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.app.arn
-  }
-}
-
-# --- Private Subnet for ALB ---
-resource "aws_subnet" "private" {
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = "10.0.2.0/24"
-  availability_zone = "us-east-1b"
-  tags = {
-    Name = "devops-private-subnet"
   }
 }
 
