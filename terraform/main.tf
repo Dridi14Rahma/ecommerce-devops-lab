@@ -5,13 +5,10 @@ provider "aws" {
 
 # --- EC2 Instances ---
 resource "aws_instance" "web" {
-  count         = 2
+  count         = 1
   ami           = "ami-0c02fb55956c7d316"
   instance_type = "t3.micro"
   key_name      = "lab-key"
-  
-  # NO user_data - let instances boot cleanly without any script execution
-  # Amazon Linux 2 has Python 3.7 by default - Ansible will use it
   
   tags = { 
     Name = "web-${count.index + 1}" 
