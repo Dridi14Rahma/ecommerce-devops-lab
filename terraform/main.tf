@@ -179,4 +179,3 @@ output "app_url" {
   description = "URL to access the application through load balancer"
   value       = "http://${aws_lb.app.dns_name}"
 }
-}
