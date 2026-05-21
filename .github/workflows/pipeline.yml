@@ -19,6 +19,7 @@ jobs:
 
     outputs:
       instance_ips: ${{ steps.export.outputs.instance_ips }}
+      load_balancer_dns: ${{ steps.export.outputs.load_balancer_dns }}
 
     steps:
       - uses: actions/checkout@v4
@@ -30,6 +31,12 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Cleanup Orphaned AWS Resources
+        if: github.event_name == 'workflow_dispatch'
+        shell: pwsh
+        run: |
+          ../scripts/aws-cleanup-ecommerce-prod.ps1 -Region ${{ secrets.AWS_REGION }} -Execute
 
       - uses: hashicorp/setup-terraform@v3
         with:
@@ -45,6 +52,7 @@ jobs:
         run: |
           IPS=$(terraform output -json instance_public_ips | jq -r '.[]' | tr '\n' ',')
           echo "instance_ips=$IPS" >> $GITHUB_OUTPUT
+          echo "load_balancer_dns=$(terraform output -raw load_balancer_dns_name)" >> $GITHUB_OUTPUT
 
 
 # ================================
@@ -83,29 +91,12 @@ jobs:
         env:
           ANSIBLE_HOST_KEY_CHECKING: "False"
 
-
-# ================================
-# DESTROY (OPTIONAL)
-# ================================
-  destroy:
-    name: Destroy Infra
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: terraform
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - uses: hashicorp/setup-terraform@v3
-
-      - run: terraform destroy -auto-approve
+      - name: Verify Application Through Load Balancer
+        run: |
+          for i in $(seq 1 20); do
+            if curl -fsS "http://${{ needs.terraform.outputs.load_balancer_dns }}"; then
+              exit 0
+            fi
+            sleep 15
+          done
+          exit 1

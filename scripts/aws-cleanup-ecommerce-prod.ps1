@@ -34,19 +34,29 @@ function Run-Action {
 
 Write-Host "🧹 Starting AWS cleanup for ecommerce-prod resources in region $Region..." -ForegroundColor Yellow
 
-# 1. Terminate EC2 instances with tag Name starting with ecommerce-prod-web
-$filterName = "ecommerce-prod-web*"
-$describeInstancesCmd = {
-    aws ec2 describe-instances --region $Region --filters "Name=tag:Name,Values=$filterName" --query 'Reservations[*].Instances[*].InstanceId' --output text
-}
-$instanceIds = & $describeInstancesCmd 2>$null
-if ($instanceIds) {
-    $ids = $instanceIds -split "\s+" | Where-Object { $_ -ne "" }
-    foreach ($id in $ids) {
-        Run-Action "1️⃣ Terminating EC2 instance: $id" { aws ec2 terminate-instances --instance-ids $id --region $Region }
+# 1. Terminate EC2 instances whose Name tag starts with web-
+$instanceQuery = aws ec2 describe-instances --region $Region --filters "Name=instance-state-name,Values=pending,running,stopping,stopped" --output json 2>$null
+if ($instanceQuery) {
+    $reservations = ($instanceQuery | ConvertFrom-Json).Reservations
+    $instanceIds = @()
+    foreach ($reservation in $reservations) {
+        foreach ($instance in $reservation.Instances) {
+            $nameTag = ($instance.Tags | Where-Object { $_.Key -eq 'Name' } | Select-Object -ExpandProperty Value -First 1)
+            if ($nameTag -and $nameTag -match '^(web-|ecommerce-prod-web-)') {
+                $instanceIds += $instance.InstanceId
+            }
+        }
+    }
+
+    if ($instanceIds.Count -gt 0) {
+        foreach ($id in $instanceIds | Sort-Object -Unique) {
+            Run-Action "1️⃣ Terminating EC2 instance: $id" { aws ec2 terminate-instances --instance-ids $id --region $Region }
+        }
+    } else {
+        Write-Host "1️⃣ No matching EC2 instances found for Name prefix web- or ecommerce-prod-web-" -ForegroundColor Green
     }
 } else {
-    Write-Host "1️⃣ No matching EC2 instances found for filter $filterName" -ForegroundColor Green
+    Write-Host "1️⃣ No EC2 instances returned by AWS CLI" -ForegroundColor Green
 }
 
 # Wait briefly for terminations (only if executing)
