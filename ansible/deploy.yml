@@ -17,138 +17,61 @@
       vars:
         ansible_connection: local
 
-    - name: Install Python 3.11
-      raw: yum install -y python3.11 2>/dev/null || amazon-linux-extras install -y python3.11 || true
-      retries: 5
-      delay: 10
-      ignore_errors: yes
-
-    - name: Detect installed Python interpreter
+  tasks:
+    - name: Install system dependencies and Docker
       raw: |
-        if command -v python3.11 >/dev/null 2>&1; then
-          command -v python3.11
-        elif command -v python3 >/dev/null 2>&1; then
-          command -v python3
-        elif command -v python >/dev/null 2>&1; then
-          command -v python
-        else
-          echo /usr/bin/python3
-        fi
-      register: python_interpreter_path
+        sudo yum install -y git curl wget yum-utils docker || exit 1
+        sudo systemctl enable docker
+        sudo systemctl start docker
+        sudo usermod -aG docker ec2-user
       changed_when: false
 
-    - name: Set Python interpreter
-      set_fact:
-        ansible_python_interpreter: "{{ python_interpreter_path.stdout | trim }}"
-
-  tasks:
-    - name: Install system dependencies
-      yum:
-        name:
-          - git
-          - curl
-          - wget
-          - yum-utils
-          - docker
-        state: present
-      retries: 3
-      delay: 10
-      ignore_errors: yes
-
-    - name: Start Docker
-      service:
-        name: docker
-        state: started
-        enabled: yes
-      retries: 3
-      delay: 10
-      ignore_errors: yes
-
     - name: Wait for Docker to be ready
-      command: docker ps
-      retries: 10
-      delay: 5
-      register: docker_ready
-      until: docker_ready.rc == 0
-      ignore_errors: yes
-
-    - name: Add ec2-user to docker group
-      user:
-        name: ec2-user
-        groups: docker
-        append: yes
+      raw: |
+        for i in $(seq 1 30); do
+          if sudo docker info >/dev/null 2>&1; then
+            exit 0
+          fi
+          sleep 5
+        done
+        exit 1
+      changed_when: false
 
     - name: Install Docker Compose
-      shell: |
-        if ! command -v docker-compose &> /dev/null; then
-          curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-          chmod +x /usr/local/bin/docker-compose
+      raw: |
+        if ! command -v docker-compose >/dev/null 2>&1; then
+          sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose && sudo chmod +x /usr/local/bin/docker-compose
         fi
-      retries: 3
-      delay: 10
-      ignore_errors: yes
+      changed_when: false
 
-    - name: Create app directory
-      file:
-        path: /home/ec2-user/app
-        state: directory
-        owner: ec2-user
-        group: ec2-user
-        mode: "0755"
-
-    - name: Copy docker-compose file
-      copy:
-        src: docker-compose.yml
-        dest: /home/ec2-user/app/docker-compose.yml
-        owner: ec2-user
-        group: ec2-user
-        mode: "0644"
-
-    - name: Copy nginx config
-      copy:
-        src: nginx.conf
-        dest: /home/ec2-user/app/nginx.conf
-        owner: ec2-user
-        group: ec2-user
-        mode: "0644"
-
-    - name: Copy server files
-      copy:
-        src: server/
-        dest: /home/ec2-user/app/server/
-        owner: ec2-user
-        group: ec2-user
-        mode: "0755"
-        recursive: yes
-
-    - name: Reset SSH connection
-      meta: reset_connection
+    - name: Clone application repository
+      raw: |
+        if [ ! -d /home/ec2-user/app/.git ]; then
+          rm -rf /home/ec2-user/app
+          git clone --depth 1 https://github.com/Dridi14Rahma/ecommerce-devops-lab.git /home/ec2-user/app
+        else
+          cd /home/ec2-user/app && git fetch origin main && git reset --hard origin/main
+        fi
+        sudo chown -R ec2-user:ec2-user /home/ec2-user/app
+      changed_when: false
 
     - name: Start containers
-      shell: |
-        cd /home/ec2-user/app
+      raw: |
+        cd /home/ec2-user/app/ansible
         docker-compose up -d
-      become_user: ec2-user
-      retries: 5
-      delay: 10
-      register: compose_start
-      until: compose_start.rc == 0
-      ignore_errors: yes
+      changed_when: false
 
     - name: Wait for application
-      pause:
-        seconds: 30
-
-    - name: Health check
-      uri:
-        url: "http://{{ inventory_hostname }}"
-        status_code: 200
-      retries: 10
-      delay: 10
-      register: app_health
-      until: app_health.status == 200
-      ignore_errors: yes
+      raw: |
+        for i in $(seq 1 20); do
+          if curl -fsS http://127.0.0.1 >/dev/null 2>&1; then
+            exit 0
+          fi
+          sleep 10
+        done
+        exit 1
+      changed_when: false
 
     - name: Deployment status
-      debug:
-        msg: "Application deployed on {{ inventory_hostname }}"
+      raw: echo "Application deployed on {{ inventory_hostname }}"
+      changed_when: false
